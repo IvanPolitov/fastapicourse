@@ -1,32 +1,67 @@
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
-from models.models import User, Feedback
+from models.models import *
 
 app = FastAPI()
-user = User(name='John Doe', id=1, age=18)
-
-fake_users = {
-    1: {'username': 'johndoe', 'email': 'johndoe@example.com'},
-    2: {'username': 'janedoe', 'email': 'janedoe@example.com'},
-    3: {'username': 'jane', 'email': 'jane@example.com'},
-    4: {'username': 'jane', 'email': 'jane@example.com'},
-
+sample_product_1 = {
+    "product_id": 123,
+    "name": "Smartphone",
+    "category": "Electronics",
+    "price": 599.99
 }
 
+sample_product_2 = {
+    "product_id": 456,
+    "name": "Phone Case",
+    "category": "Accessories",
+    "price": 19.99
+}
 
-def make_message(name):
-    return f"Feedback received. Thank you, {name}!"
+sample_product_3 = {
+    "product_id": 789,
+    "name": "Iphone",
+    "category": "Electronics",
+    "price": 1299.99
+}
+
+sample_product_4 = {
+    "product_id": 101,
+    "name": "Headphones",
+    "category": "Accessories",
+    "price": 99.99
+}
+
+sample_product_5 = {
+    "product_id": 202,
+    "name": "Smartwatch",
+    "category": "Electronics",
+    "price": 299.99
+}
+
+sample_products = [
+    sample_product_1,
+    sample_product_2,
+    sample_product_3,
+    sample_product_4,
+    sample_product_5,
+]
 
 
-@app.post('/feedback')
-async def ffeedback(feedback: Feedback):
-    message = make_message(feedback.name)
-    return {"message": message}
+@app.get('/product/{product_id}')
+async def get_product(product_id: int) -> Product:
+    result = None
+    for product in sample_products:
+        if product['product_id'] == product_id:
+            result = Product(**product)
+            break
+    return result
 
 
-@app.get('/users/{user_id}')
-async def read_user(user_id: int):
-    if user_id in fake_users:
-        return fake_users[user_id]
-    else:
-        return {"error": "User not found"}
+@app.get('/products/search')
+async def search(keyword: str, category: str | None = None, limit: int | None = 10) -> list[Product]:
+    result = []
+    for product in sample_products:
+        if keyword.lower() in product['name'].lower():
+            if category and category == product['category']:
+                result.append(Product(**product))
+
+    return result[:limit]
