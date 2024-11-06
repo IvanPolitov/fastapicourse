@@ -1,20 +1,32 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from models.models import User
+from models.models import User, Feedback
 
 app = FastAPI()
 user = User(name='John Doe', id=1, age=18)
 
+fake_users = {
+    1: {'username': 'johndoe', 'email': 'johndoe@example.com'},
+    2: {'username': 'janedoe', 'email': 'janedoe@example.com'},
+    3: {'username': 'jane', 'email': 'jane@example.com'},
+    4: {'username': 'jane', 'email': 'jane@example.com'},
 
-def is_adult(user):
-    return user.age >= 18
+}
 
 
-@app.get('/users')
-async def root():
-    return user
+def make_message(name):
+    return f"Feedback received. Thank you, {name}!"
 
 
-@app.post('/user')
-async def check_user(user: User):
-    return {"is_adult": 'Yes' if is_adult(user) else 'No'}
+@app.post('/feedback')
+async def ffeedback(feedback: Feedback):
+    message = make_message(feedback.name)
+    return {"message": message}
+
+
+@app.get('/users/{user_id}')
+async def read_user(user_id: int):
+    if user_id in fake_users:
+        return fake_users[user_id]
+    else:
+        return {"error": "User not found"}
