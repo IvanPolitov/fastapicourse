@@ -1,67 +1,37 @@
-from fastapi import FastAPI
-from models.models import *
+from fastapi import FastAPI, Cookie, Response
+from models.models import User
+from random import randint
 
 app = FastAPI()
-sample_product_1 = {
-    "product_id": 123,
-    "name": "Smartphone",
-    "category": "Electronics",
-    "price": 599.99
-}
-
-sample_product_2 = {
-    "product_id": 456,
-    "name": "Phone Case",
-    "category": "Accessories",
-    "price": 19.99
-}
-
-sample_product_3 = {
-    "product_id": 789,
-    "name": "Iphone",
-    "category": "Electronics",
-    "price": 1299.99
-}
-
-sample_product_4 = {
-    "product_id": 101,
-    "name": "Headphones",
-    "category": "Accessories",
-    "price": 99.99
-}
-
-sample_product_5 = {
-    "product_id": 202,
-    "name": "Smartwatch",
-    "category": "Electronics",
-    "price": 299.99
-}
-
-sample_products = [
-    sample_product_1,
-    sample_product_2,
-    sample_product_3,
-    sample_product_4,
-    sample_product_5,
+sample = [
+    {'username': 'admin', 'password': 'admin'},
+    {'username': 'user', 'password': 'user'},
 ]
 
+dbusers = [User(**q) for q in sample]
 
-@app.get('/product/{product_id}')
-async def get_product(product_id: int) -> Product:
-    result = None
-    for product in sample_products:
-        if product['product_id'] == product_id:
-            result = Product(**product)
-            break
-    return result
+sessions = {}
 
 
-@app.get('/products/search')
-async def search(keyword: str, category: str | None = None, limit: int | None = 10) -> list[Product]:
-    result = []
-    for product in sample_products:
-        if keyword.lower() in product['name'].lower():
-            if category and category == product['category']:
-                result.append(Product(**product))
+@app.post('/login')
+async def login(user: User, response: Response):
+    for person in dbusers:
+        if user.username == person.username and user.password == person.password:
+            session_token = str(randint(0, 1000))
+            sessions[session_token] = user
+            response.set_cookie(key='session_token',
+                                value=session_token, httponly=True)
+            print(sessions)
+            return {'message': 'Cookie ready'}
+    return {'message': 'Invalid credentials'}
 
-    return result[:limit]
+
+@app.get('/user')
+async def get_user(session_token=Cookie()):
+    print(sessions)
+    print(session_token)
+
+    user = sessions.get((session_token))
+    if user:
+        return user.dict()
+    return {'message': 'Invalid credentials'}
