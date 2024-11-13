@@ -1,44 +1,78 @@
+from pydantic import BaseModel
+from typing import Annotated
 from fastapi import FastAPI, Depends, HTTPException, status
-from models.models import *
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
+from fastapi.security import OAuth2PasswordBearer
+import jwt
+import random
+from datetime import timedelta, datetime, timezone
 
 app = FastAPI()
-security = HTTPBasic()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/login')
+
+SECRET_KEY = "dba749b064fa8502475b7bd8b31b81d2cb20a34fbfee762ba4ba9c09093c799a"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 1
+
+
+class User(BaseModel):
+    username: str
+    password: str
+
 
 USER_DATA = [
-    User(**{'username': 'user1', 'password': 'password1'}),
-    User(**{'username': 'user2', 'password': 'password2'}),
-    User(**{'username': 'user3', 'password': 'password3'}),
+    User(**{"username": "admin", "password": "admin"}),
+    User(**{"username": "string", "password": "string"}),
 ]
 
 
-def get_user_from_db(username: str):
+def is_valid_user(user_in: User) -> User:
+    print(user_in)
     for user in USER_DATA:
-        if user.username == username:
+        if user.username == user_in.username and user.password == user_in.password:
             return user
-    return None
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid credentials. Unauthorized."
+    )
 
 
-def authenticate_user(credentials: HTTPBasicCredentials = Depends(security)):
-    user = get_user_from_db(credentials.username)
-    if user is None or credentials.password != user.password:
+def get_jwt_from(data: User) -> str:
+    now = datetime.now(timezone.utc)
+    token = jwt.encode(
+        payload={
+            "sub": data.username,
+            "iat": now,
+            # "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        },
+        key=SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+    return token
+
+
+def imitate_data_acquiring(token: str = Depends(oauth2_scheme)) -> dict:
+    try:
+        body = jwt.decode(
+            jwt=token,
+            key=SECRET_KEY,
+            algorithms=ALGORITHM
+        )
+    except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid credentials',
-            headers={'WWW-Autheticate': 'Basic'}
+            detail="Your token has expired. Unauthorized."
         )
-    return user
+    return {"username": body["sub"], "sensitive_data": random.randint(1, 99)}
+
+
+@app.post('/login')
+async def login(data=Depends(is_valid_user)):
+    print(type(data))
+    token = get_jwt_from(data)
+    return {'access_token': token, 'token_type': "bearer"}
 
 
 @app.get('/protected_resource')
-async def get_resource(user: User = Depends(authenticate_user)):
-    return {'message': 'You got my secret, welcome', 'user': user}
-
-
-@app.get("/logout")
-def logout():
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="You have successfully logged out",
-        headers={"WWW-Authenticate": "Basic"},
-    )
+async def protected_resource(sensitive_data: dict = Depends(imitate_data_acquiring)):
+    return sensitive_data
