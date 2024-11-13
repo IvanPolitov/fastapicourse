@@ -1,78 +1,54 @@
+from datetime import datetime, timezone, timedelta
+from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Annotated
-from fastapi import FastAPI, Depends, HTTPException, status
-
-from fastapi.security import OAuth2PasswordBearer
+from typing import Annotated, Optional
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import jwt
-import random
-from datetime import timedelta, datetime, timezone
-
-app = FastAPI()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/login')
-
-SECRET_KEY = "dba749b064fa8502475b7bd8b31b81d2cb20a34fbfee762ba4ba9c09093c799a"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1
 
 
 class User(BaseModel):
     username: str
     password: str
+    role: Optional[str] = 'guest'
 
 
 USER_DATA = [
-    User(**{"username": "admin", "password": "admin"}),
-    User(**{"username": "string", "password": "string"}),
+    {'username': 'admin', 'password': 'admin'},
+    {'username': 'user', 'password': 'user'},
+    {'username': 'guest', 'password': 'guest'},
 ]
 
+SECRET_KEY = 'secret'
+ALGORITHM = 'HS256'
+EXPIRES_IN = 1
 
-def is_valid_user(user_in: User) -> User:
-    print(user_in)
+app = FastAPI()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/login')
+
+
+def get_user_from_db(input_user: User):
     for user in USER_DATA:
-        if user.username == user_in.username and user.password == user_in.password:
+        if input_user.username == user['username'] and input_user.password == user['password']:
             return user
     raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid credentials. Unauthorized."
+        status_code=401,
+        detail='Incorrect username or password',
+        headers={'WWW-Authenticate': 'Bearer'}
     )
 
 
-def get_jwt_from(data: User) -> str:
-    now = datetime.now(timezone.utc)
-    token = jwt.encode(
-        payload={
-            "sub": data.username,
-            "iat": now,
-            # "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-        },
-        key=SECRET_KEY,
-        algorithm=ALGORITHM
-    )
-    return token
-
-
-def imitate_data_acquiring(token: str = Depends(oauth2_scheme)) -> dict:
-    try:
-        body = jwt.decode(
-            jwt=token,
-            key=SECRET_KEY,
-            algorithms=ALGORITHM
-        )
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Your token has expired. Unauthorized."
-        )
-    return {"username": body["sub"], "sensitive_data": random.randint(1, 99)}
+def create_access_token(user: User) -> str:
+    payload = {
+        'username': user.username,
+        'role': user.role,
+        'exp': datetime.now(timezone.utc) + timedelta(minutes=EXPIRES_IN),
+    }
+    encoded_jwt = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 
 @app.post('/login')
-async def login(data=Depends(is_valid_user)):
-    print(type(data))
-    token = get_jwt_from(data)
-    return {'access_token': token, 'token_type': "bearer"}
-
-
-@app.get('/protected_resource')
-async def protected_resource(sensitive_data: dict = Depends(imitate_data_acquiring)):
-    return sensitive_data
+async def login(input_user: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    user = get_user_from_db(input_user)
+    token = create_access_token(User(**user))
+    return {'message': 'You are logged in', 'token': token}
