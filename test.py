@@ -1,22 +1,5 @@
-from functools import wraps
+import environs
 
-
-def qq(args):
-    def wrapper(func):
-        @wraps(func)
-        def wrap():
-            print("before")
-            func(args)
-            print("after")
-            return
-        return wrap
-    return wrapper
-
-
-@qq('user')
-def hello(q):
-    print("hello,", q)
-    return
-
-
-hello()
+env = environs.Env()
+q = env.read_env()
+print((q))
