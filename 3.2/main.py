@@ -1,5 +1,4 @@
 from fastapi import FastAPI, Request, Response, HTTPException
-from test_data import sample_products
 from pydantic import BaseModel
 
 
